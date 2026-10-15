@@ -15,7 +15,7 @@
 
 **Repos GitHub**
 
-- `github.com/Maruffly/Iot` : le rendu. Contient le commit `640efe4` (P1, P2, docs). **P3 et les modifs du jour ne sont pas encore commités.**
+- `github.com/Maruffly/Iot` : le rendu. Contient P1, P2, P3 et les docs (dernier commit `a02fdff`).
 - `github.com/Maruffly/jmaruffy-iot` : les manifests surveillés par Argo CD. Il est sur `v1`, prêt pour la soutenance.
 - Le compte `jbmaruffy-rcube` (clé SSH du poste) est collaborateur des deux repos.
 
@@ -23,7 +23,7 @@
 
 ## 2. À faire à la prochaine session
 
-1. **Commit + push** de `p3/`, `docs/` et `.gitignore` sur `Maruffly/Iot`.
+1. ~~Commit + push de `p3/` et `docs/`~~ : fait (`a02fdff`).
 2. Installer `shellcheck` (`sudo dnf install ShellCheck`), puis `shellcheck p*/scripts/*.sh`.
 3. Commencer le **bonus** (GitLab dans le namespace `gitlab`).
 4. Avant l'éval : dérouler la checklist « Avant l'éval » de `SOUTENANCE.md` sur la **VM de 42** (VirtualBox, box `bento/debian-13`). Rien n'y a encore été testé.
