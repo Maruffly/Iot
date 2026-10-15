@@ -1,9 +1,10 @@
-# Préparation de la soutenance : état du projet (P1 et P2)
+# Préparation de la soutenance : état du projet (P1, P2 et P3)
 
-Point fait le 2026-10-14. Les exigences numérotées (P1.x, P2.x) renvoient à [`SPECS.md`](SPECS.md).
+Point fait le 2026-10-14, P3 ajouté le 2026-10-15. Les exigences numérotées (P1.x, P2.x, P3.x) renvoient à [`SPECS.md`](SPECS.md).
 
 > **Statut des tests.** P1 et P2 ont été testés de bout en bout sur un **banc local KVM/libvirt** (WSL2), avec la box `debian/trixie64`.
 > Ils n'ont **pas encore** été testés avec VirtualBox et `bento/debian-13`, la configuration de la soutenance. Il faut repasser la checklist sur la VM de 42 avant l'éval.
+> P3 a été testé sur une **VM Debian 13.5 vierge** du banc (2 vCPU, 4 Go) : `install.sh`, `deploy.sh`, puis démo v1 → v2 réussie.
 
 ---
 
@@ -12,7 +13,7 @@ Point fait le 2026-10-14. Les exigences numérotées (P1.x, P2.x) renvoient à [
 | # | Problème | Conséquence | Correction proposée |
 |---|----------|-------------|---------------------|
 | ~~B1~~ | ✅ **Corrigé le 2026-10-15.** `p1/confs/` était vide, donc absent après un `git clone` (le `cp` du token échouait). | – | Les options K3s sont dans `confs/server.yaml` et `confs/agent.yaml`, copiés en `/etc/rancher/k3s/config.yaml` (voir §1, point 8). |
-| B2 | Le projet n'est pas encore un repo Git. | Impossible de faire le test « `git clone` dans un dossier vide » demandé par la fiche. | `git init`, premier commit, puis tester un clone dans `/tmp`. |
+| ~~B2~~ | ✅ **Fait le 2026-10-15.** Repo Git créé (remote `git@github.com:Maruffly/Iot.git`). | – | Clone neuf dans un dossier vide + `vagrant up` de P1 testé sur le banc : 2 nœuds `Ready`. |
 
 ---
 
@@ -183,7 +184,69 @@ curl -H "Host: app2.com" 192.168.56.110:80
 
 ---
 
-## 3. Pièges de la soutenance (P1 et P2)
+## 3. Partie 3 : K3d et Argo CD
+
+### Ce qui a été fait
+
+```
+p3/
+├── scripts/
+│   ├── install.sh        Docker (dépôt apt officiel), kubectl (stable.txt + sha256), k3d (script officiel)
+│   └── deploy.sh         cluster k3d "iot", namespaces, Argo CD, Application, attente de l'app
+└── confs/
+    ├── namespaces.yaml   argocd + dev
+    └── application.yaml  Application Argo CD → github.com/Maruffly/jmaruffy-iot, namespace dev
+
+github.com/Maruffly/jmaruffy-iot   (repo public séparé, surveillé par Argo CD)
+├── deployment.yaml       wil42/playground:v1, port 8888
+└── service.yaml          type LoadBalancer, port 8888
+```
+
+**Déroulé :**
+1. `./p3/scripts/install.sh` installe les outils (avec `sudo`) et ajoute l'utilisateur au groupe `docker`.
+2. `./p3/scripts/deploy.sh` :
+   - se relance avec `sg docker` si le groupe `docker` n'est pas encore actif dans la session (évite de se déconnecter) ;
+   - `k3d cluster create iot -p "8888:8888@loadbalancer" --k3s-arg "--disable=traefik,metrics-server@server:0"` ;
+   - applique `namespaces.yaml`, installe Argo CD (`--server-side`), attend ses composants ;
+   - applique `application.yaml`, attend que `curl localhost:8888` réponde, affiche le mot de passe admin.
+3. Argo CD clone le repo `jmaruffy-iot` et crée le Deployment et le Service dans `dev`.
+
+**Chemin d'une requête `curl localhost:8888`** : port 8888 de la VM → conteneur `k3d-iot-serverlb` (le load balancer de k3d, mappé par `-p`) → port 8888 du nœud `k3d-iot-server-0` (ouvert par ServiceLB de K3s car le Service est de type `LoadBalancer`) → pod `playground`.
+
+### Résultats sur le banc
+
+| Étape | Résultat |
+|---|---|
+| `install.sh` (×2) | Docker 29.9.1, kubectl v1.37.1, k3d v5.9.0 (K3s v1.35.5). Relance : OK |
+| `deploy.sh` | ~5 min sur VM vierge (téléchargement des images compris), puis `{"status":"ok", "message": "v1"}` |
+| Démo | push `v1` → `v2` sur GitHub, `v2` servi **~5 min** après (polling Argo CD ~3 min + pull de l'image). App `Synced` / `Healthy` |
+| `deploy.sh` relancé | OK, rien de recréé |
+
+### Particularités à savoir défendre
+
+**1. K3s ou K3d ?** K3s est la distribution Kubernetes, installée comme service sur une machine (P1, P2). K3d est un outil qui lance des nœuds K3s **dans des conteneurs Docker** : `docker ps` montre `k3d-iot-server-0` et `k3d-iot-serverlb`. Création et destruction en quelques secondes, sans VM.
+
+**2. GitOps.** L'état voulu du cluster est dans Git. Argo CD compare Git et le cluster, et corrige l'écart :
+- `automated` : synchronise sans clic ;
+- `prune: true` : supprime du cluster ce qui a été retiré du repo ;
+- `selfHeal: true` : annule une modification faite à la main avec `kubectl`.
+Pour la démo, cliquer *Refresh* dans l'interface évite d'attendre le polling (~3 min).
+
+**3. Pourquoi deux repos ?** Le repo du rendu contient l'infrastructure (scripts, Application). Le repo `jmaruffy-iot` ne contient que ce qu'Argo CD déploie. Le sujet impose ce repo public avec le login dans le nom.
+
+**4. Pas de `namespace:` dans les manifests de `jmaruffy-iot`.** Argo CD place les objets dans `destination.namespace` (`dev`) de l'Application.
+
+**5. `--server-side` pour Argo CD.** Certaines CRD d'Argo CD sont trop grosses pour l'annotation qu'écrit un `kubectl apply` classique. C'est la commande de la doc officielle.
+
+**6. Ressources.** K3s et les 7 composants d'Argo CD : environ 1,7 Go de RAM utilisés. Prévoir **au moins 2 vCPU et 4 Go** pour la VM de soutenance.
+
+**7. Le disque lent (vécu sur le banc).** Sur le banc WSL2, chaque écriture synchrone prenait ~45 ms. La base SQLite de K3s (kine) ne suivait plus (`Slow SQL`), l'API ne répondait plus et Argo CD restait non-Ready, même avec 4 vCPU. Contourné sur le banc avec le cache disque `unsafe`. Sur la VM de 42, si `deploy.sh` expire, mesurer : `dd if=/dev/zero of=/var/tmp/t bs=4k count=300 oflag=dsync`.
+
+**8. Version de kubectl.** kubectl v1.37 contre K3s v1.35 dans k3d : deux versions mineures d'écart, alors que Kubernetes garantit ±1. Aucun problème constaté pour les commandes de l'éval.
+
+---
+
+## 4. Pièges de la soutenance (P1 et P2)
 
 | Piège | Parade |
 |---|---|
@@ -199,7 +262,7 @@ curl -H "Host: app2.com" 192.168.56.110:80
 
 ---
 
-## 4. Questions d'oral probables (réponses courtes)
+## 5. Questions d'oral probables (réponses courtes)
 
 - **K3s ?** Kubernetes allégé : un seul binaire, base SQLite par défaut, Traefik, ServiceLB, CoreDNS et flannel inclus.
 - **Server ou agent ?** Le server porte le plan de contrôle (API, scheduler, stockage de l'état du cluster). L'agent exécute les pods (kubelet et containerd).
@@ -210,13 +273,17 @@ curl -H "Host: app2.com" 192.168.56.110:80
 
 ---
 
-## 5. Avant l'éval : checklist sur la VM de 42 (VirtualBox)
+## 6. Avant l'éval : checklist sur la VM de 42 (VirtualBox)
 
-- [ ] Corriger B1, `git init`, commit, puis `git clone` dans un dossier vide
+- [x] Corriger B1, `git init`, commit, puis `git clone` dans un dossier vide (banc KVM, à refaire sur la VM de 42)
 - [ ] P1 : `vagrant up`, puis dans les deux VMs `hostname`, la commande `ip a show $(ip route | grep default …)` et `kubectl get nodes -o wide`
 - [ ] P1 : `vagrant reload`, puis vérifier à nouveau la route
 - [ ] P1 : `vagrant destroy -f`
 - [ ] P2 : `vagrant up`, attendre Traefik, puis `kubectl get all`, `kubectl get ingress`, `kubectl describe ingress apps`
 - [ ] P2 : les 4 `curl` (app1, app2 ×3, sans Host, autre Host) depuis l'hôte
 - [ ] Mesurer la RAM (`free -m`) avec la box `bento/debian-13`
+- [ ] P3 : `install.sh` puis `deploy.sh` sur la VM (au moins 2 vCPU / 4 Go), vérifier que `jmaruffy-iot` est sur `v1`
+- [ ] P3 : `kubectl get ns`, `kubectl get pods -n dev`, `curl localhost:8888` → v1
+- [ ] P3 : interface Argo CD (`port-forward` 8080:443), login `admin`
+- [ ] P3 : push `v2` sur `jmaruffy-iot`, *Refresh*, `curl` → v2 ; puis remettre `v1`
 - [ ] `shellcheck p*/scripts/*.sh`

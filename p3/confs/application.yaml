@@ -1,0 +1,20 @@
+# Argo CD Application: keeps namespace dev in sync with the manifests of the
+# public GitHub repo. Pushing a new image tag there redeploys the app.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: playground
+  namespace: argocd          # Applications live in Argo CD's namespace
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Maruffly/jmaruffy-iot.git
+    targetRevision: main
+    path: .
+  destination:
+    server: https://kubernetes.default.svc   # the cluster Argo CD runs in
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true       # delete what was removed from the repo
+      selfHeal: true    # undo manual changes made in the cluster
