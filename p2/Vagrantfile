@@ -1,0 +1,34 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Inception-of-Things - Part 2
+# One VM running K3s in server mode, hosting 3 web apps behind an Ingress:
+#   jmaruffyS (Server) -> K3s server, 192.168.56.110
+#   Host app1.com -> app1, app2.com -> app2 (3 replicas), any other -> app3
+
+LOGIN     = "jmaruffy"
+BOX       = "bento/debian-13"   # Debian 13 "trixie": latest stable Debian
+SERVER_IP = "192.168.56.110"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = BOX
+  config.vm.box_check_update = true
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.cpus   = 1
+    vb.memory = 1024
+    vb.linked_clone = true   # clone the box disk instead of copying it: faster, lighter
+  end
+
+  config.vm.define "#{LOGIN}S", primary: true do |server|
+    server.vm.hostname = "#{LOGIN}S"
+    server.vm.network "private_network", ip: SERVER_IP
+    server.vm.provider "virtualbox" do |vb|
+      vb.name = "#{LOGIN}S"
+    end
+    # Routes are lost at reboot: replayed on every `vagrant up` / `vagrant reload`
+    server.vm.provision "shell", path: "scripts/set-default-route.sh", args: [SERVER_IP], run: "always"
+    # K3s + the manifests of confs/ (synced in the VM as /vagrant/confs)
+    server.vm.provision "shell", path: "scripts/server.sh", args: [SERVER_IP]
+  end
+end

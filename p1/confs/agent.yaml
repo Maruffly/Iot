@@ -1,0 +1,8 @@
+# K3s agent configuration, installed as /etc/rancher/k3s/config.yaml.
+# Same keys as the command-line flags, without the leading "--".
+# node-ip and flannel-iface depend on the VM: agent.sh passes them on the
+# command line. The join token is a secret: it is not stored here but read
+# from the file written by server.sh (ignored by Git).
+
+# API of the K3s server (jmaruffyS) to join
+server: "https://192.168.56.110:6443"

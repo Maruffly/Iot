@@ -1,0 +1,8 @@
+# Vagrant local state
+.vagrant/
+
+# K3s join token generated at provisioning time (shared through /vagrant)
+p1/confs/node-token
+
+# Windows download metadata (WSL2)
+*:Zone.Identifier

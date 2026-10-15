@@ -1,0 +1,17 @@
+# K3s server configuration, installed as /etc/rancher/k3s/config.yaml.
+# Same keys as the command-line flags, without the leading "--".
+# node-ip and flannel-iface depend on the VM: server.sh passes them on the
+# command line.
+
+# kubeconfig readable by the vagrant user: kubectl works without sudo
+write-kubeconfig-mode: "0644"
+
+# Part 1 only needs a working 2-node cluster. With 1 CPU / 1024 MB (K3s asks
+# 2 GB for a server), skip the packaged add-ons we do not use to save memory.
+disable:
+  - traefik          # Ingress controller
+  - servicelb        # LoadBalancer services
+  - metrics-server   # kubectl top
+  - local-storage    # local volumes
+disable-helm-controller: true   # only used to deploy traefik
+disable-network-policy: true    # NetworkPolicy controller

@@ -1,0 +1,37 @@
+# app2: same image as app1, but 3 replicas (pods) behind one Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app2
+  labels:
+    app: app2
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: app2
+  template:
+    metadata:
+      labels:
+        app: app2
+    spec:
+      containers:
+        - name: app2
+          image: traefik/whoami:v1.12.0
+          env:
+            - name: WHOAMI_NAME   # printed as "Name: app2" in every response
+              value: app2
+          ports:
+            - containerPort: 80
+---
+# Stable internal address (ClusterIP) in front of the app2 pods
+apiVersion: v1
+kind: Service
+metadata:
+  name: app2
+spec:
+  selector:
+    app: app2
+  ports:
+    - port: 80
+      targetPort: 80

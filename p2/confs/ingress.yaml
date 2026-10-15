@@ -1,0 +1,38 @@
+# Routes HTTP requests reaching 192.168.56.110:80 (Traefik, the K3s built-in
+# Ingress controller) according to their Host header.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apps
+spec:
+  rules:
+    - host: app1.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app1
+                port:
+                  number: 80
+    - host: app2.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app2
+                port:
+                  number: 80
+    # No host: matches every other Host header (and plain IP), so app3 is the default
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app3
+                port:
+                  number: 80
